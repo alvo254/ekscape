@@ -3,7 +3,7 @@ variable "cidr_block" {
 }
 
 variable "project" {
-  default = "sky"
+  default = "ekscape"
 }
 
 variable "env" {
