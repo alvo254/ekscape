@@ -1,7 +1,7 @@
 resource "aws_vpc" "ekscape" {
-  cidr_block = var.cidr_block
-  instance_tenancy = "default"
-  enable_dns_hostnames = true
+  cidr_block                       = var.cidr_block
+  instance_tenancy                 = "default"
+  enable_dns_hostnames             = true
   assign_generated_ipv6_cidr_block = true
 
   tags = {
@@ -13,29 +13,29 @@ resource "aws_vpc" "ekscape" {
 data "aws_availability_zones" "available_zones" {}
 
 resource "aws_subnet" "ekscape-pub-sub1" {
-  vpc_id = aws_vpc.ekscape.id
-  cidr_block = var.public_subnet1
-  map_public_ip_on_launch = true
-  availability_zone = data.aws_availability_zones.available_zones.names[0]
+  vpc_id                          = aws_vpc.ekscape.id
+  cidr_block                      = var.public_subnet1
+  map_public_ip_on_launch         = true
+  availability_zone               = data.aws_availability_zones.available_zones.names[0]
   assign_ipv6_address_on_creation = true
-  ipv6_cidr_block = cidrsubnet(aws_vpc.ekscape.ipv6_cidr_block, 8, 1)  //Read more in `Docs/technical-docs.md`
+  ipv6_cidr_block                 = cidrsubnet(aws_vpc.ekscape.ipv6_cidr_block, 8, 1) //Read more in `Docs/technical-docs.md`
 
   tags = {
-    Name = "${var.project}- ${var.env}-public-sub-1"
+    Name = "${var.project}-${var.env}-public-sub-1"
   }
 }
 
 resource "aws_subnet" "ekscape-pub-sub2" {
-  vpc_id = aws_vpc.ekscape.id
-  cidr_block = var.public_subnet2
-  map_public_ip_on_launch = true
-  availability_zone = data.aws_availability_zones.available_zones.names[1]
+  vpc_id                          = aws_vpc.ekscape.id
+  cidr_block                      = var.public_subnet2
+  map_public_ip_on_launch         = true
+  availability_zone               = data.aws_availability_zones.available_zones.names[1]
   assign_ipv6_address_on_creation = true
-  ipv6_cidr_block = cidrsubnet(aws_vpc.ekscape.ipv6_cidr_block, 8, 2)
+  ipv6_cidr_block                 = cidrsubnet(aws_vpc.ekscape.ipv6_cidr_block, 8, 2)
 
 
   tags = {
-    Name = "${var.project}- ${var.env}-public-sub-2"
+    Name = "${var.project}-${var.env}-public-sub-2"
   }
 }
 
@@ -43,7 +43,7 @@ resource "aws_internet_gateway" "ekscape-igw" {
   vpc_id = aws_vpc.ekscape.id
 
   tags = {
-    Name = "${var.project}- ${var.env}-igw"
+    Name = "${var.project}-${var.env}-igw"
   }
 }
 
@@ -57,7 +57,7 @@ resource "aws_route_table" "ekscape-rtb" {
   }
   route {
     ipv6_cidr_block = "::/0"
-    gateway_id = aws_internet_gateway.ekscape-igw.id
+    gateway_id      = aws_internet_gateway.ekscape-igw.id
   }
 }
 

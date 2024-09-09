@@ -8,7 +8,7 @@ module "sg" {
 }
 
 module "eks" {
-  source = "./modules/eks"
+  source   = "./modules/eks"
   pub_sub1 = module.vpc.pub_sub1
   pub_sub2 = module.vpc.pub_sub2
 }
