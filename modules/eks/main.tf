@@ -112,40 +112,76 @@ resource "kubernetes_namespace" "test_namespace" {
   }
 }
 
-resource "kubernetes_deployment" "ekscape" {
-  metadata {
-    name      = "ekscape-deployment"
-    namespace = "default"  # Replace with your namespace
-    labels = {
-      app = "ekscape-app"
-    }
-  }
+data "template_file" "deployment" {
+  template = file("${path.module}/templates/deployment_template.yaml")
 
-  spec {
-    replicas = 3  # Number of replicas
-
-    selector {
-      match_labels = {
-        app = "ekscape-app"
-      }
-    }
-
-    template {
-      metadata {
-        labels = {
-          app = "ekscape-app"
-        }
-      }
-
-      spec {
-        container {
-          name  = "ekscape-container"
-          image = "nginx:latest"  # Replace with your container image
-        }
-      }
-    }
+  vars = {
+    name            = "ekscape-deployment"
+    namespace       = "default"
+    app_label       = "ekscape-app"
+    replicas        = 3
+    container_name  = "ekscape-container"
+    container_image = "nginx:latest"
+    container_port  = 80
   }
 }
+
+resource "kubernetes_manifest" "deployment" {
+  manifest = yamldecode(data.template_file.deployment.rendered)
+}
+
+data "template_file" "service" {
+  template = file("${path.module}/templates/service_template.yaml")
+
+  vars = {
+    name           = "ekscape-service"
+    namespace      = "default"
+    app_label      = "ekscape-app"
+    service_port   = 80
+    container_port = 80
+    service_type   = "LoadBalancer"  #"ClusterIP"  # or "LoadBalancer", "NodePort", depending on your needs
+  }
+}
+
+resource "kubernetes_manifest" "service" {
+  manifest = yamldecode(data.template_file.service.rendered)
+}
+
+
+# resource "kubernetes_deployment" "ekscape" {
+#   metadata {
+#     name      = "ekscape-deployment"
+#     namespace = "default"  # Replace with your namespace
+#     labels = {
+#       app = "ekscape-app"
+#     }
+#   }
+
+#   spec {
+#     replicas = 3  # Number of replicas
+
+#     selector {
+#       match_labels = {
+#         app = "ekscape-app"
+#       }
+#     }
+
+#     template {
+#       metadata {
+#         labels = {
+#           app = "ekscape-app"
+#         }
+#       }
+
+#       spec {
+#         container {
+#           name  = "ekscape-container"
+#           image = "nginx:latest"  # Replace with your container image
+#         }
+#       }
+#     }
+#   }
+# }
 
 
 
