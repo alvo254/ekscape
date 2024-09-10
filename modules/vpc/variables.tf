@@ -3,14 +3,14 @@ variable "cidr_block" {
 }
 
 variable "project" {
-  default = "sky"
+  default = "ekscape"
 }
 
 variable "env" {
   default = "prod"
 }
 
-variable "public_subnet" {
+variable "public_subnet1" {
   default = "172.16.0.0/22"
 }
 
