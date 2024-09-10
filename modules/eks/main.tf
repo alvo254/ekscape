@@ -147,61 +147,22 @@ resource "kubernetes_manifest" "service" {
   manifest = yamldecode(data.template_file.service.rendered)
 }
 
+resource "null_resource" "cilium_install" {
+  provisioner "local-exec" {
+    command = <<-EOT
+      aws eks update-kubeconfig --name ${aws_eks_cluster.ekscape.name} --region us-east-1
+      helm repo add cilium https://helm.cilium.io/
+      helm repo update
+      helm install cilium cilium/cilium --version 1.15.6 \
+        --namespace kube-system \
+        --set eks.enabled=true \
+        --set nodeinit.enabled=true \
+        --set nodeinit.restartPods=true
+    EOT
+  }
 
-# resource "kubernetes_deployment" "ekscape" {
-#   metadata {
-#     name      = "ekscape-deployment"
-#     namespace = "default"  # Replace with your namespace
-#     labels = {
-#       app = "ekscape-app"
-#     }
-#   }
-
-#   spec {
-#     replicas = 3  # Number of replicas
-
-#     selector {
-#       match_labels = {
-#         app = "ekscape-app"
-#       }
-#     }
-
-#     template {
-#       metadata {
-#         labels = {
-#           app = "ekscape-app"
-#         }
-#       }
-
-#       spec {
-#         container {
-#           name  = "ekscape-container"
-#           image = "nginx:latest"  # Replace with your container image
-#         }
-#       }
-#     }
-#   }
-# }
-
-
-
-# resource "null_resource" "cilium_install" {
-#   provisioner "local-exec" {
-#     command = <<-EOT
-#       aws eks update-kubeconfig --name ${aws_eks_cluster.ekscape.name} --region us-east-1
-#       helm repo add cilium https://helm.cilium.io/
-#       helm repo update
-#       helm install cilium cilium/cilium --version 1.14.2 \
-#         --namespace kube-system \
-#         --set eks.enabled=true \
-#         --set nodeinit.enabled=true \
-#         --set nodeinit.restartPods=true
-#     EOT
-#   }
-
-#   depends_on = [aws_eks_cluster.ekscape, aws_eks_node_group.eks_nodes]
-# }
-
+  depends_on = [aws_eks_cluster.ekscape, aws_eks_node_group.eks_nodes]
+}
 
 # resource "null_resource" "argocd_install" {
 #   provisioner "local-exec" {
