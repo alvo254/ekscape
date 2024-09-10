@@ -32,8 +32,8 @@ resource "aws_eks_cluster" "ekscape" {
   # Otherwise, EKS will not be able to properly delete EKS managed EC2 infrastructure such as Security Groups.
   depends_on = [
     aws_iam_role.eks-iam-role
-    # aws_iam_role_policy_attachment.example-AmazonEKSClusterPolicy,
-    # aws_iam_role_policy_attachment.example-AmazonEKSVPCResourceController,
+    # aws_iam_role_policy_attachment.ekscape-AmazonEKSClusterPolicy,
+    # aws_iam_role_policy_attachment.ekscape-AmazonEKSVPCResourceController,
   ]
 }
 
@@ -106,6 +106,49 @@ resource "aws_eks_node_group" "eks_nodes" {
 }
 
 
+resource "kubernetes_namespace" "test_namespace" {
+  metadata {
+    name = "test-namespace"
+  }
+}
+
+resource "kubernetes_deployment" "ekscape" {
+  metadata {
+    name      = "ekscape-deployment"
+    namespace = "default"  # Replace with your namespace
+    labels = {
+      app = "ekscape-app"
+    }
+  }
+
+  spec {
+    replicas = 3  # Number of replicas
+
+    selector {
+      match_labels = {
+        app = "ekscape-app"
+      }
+    }
+
+    template {
+      metadata {
+        labels = {
+          app = "ekscape-app"
+        }
+      }
+
+      spec {
+        container {
+          name  = "ekscape-container"
+          image = "nginx:latest"  # Replace with your container image
+        }
+      }
+    }
+  }
+}
+
+
+
 # resource "null_resource" "cilium_install" {
 #   provisioner "local-exec" {
 #     command = <<-EOT
@@ -118,6 +161,21 @@ resource "aws_eks_node_group" "eks_nodes" {
 #         --set nodeinit.enabled=true \
 #         --set nodeinit.restartPods=true
 #     EOT
+#   }
+
+#   depends_on = [aws_eks_cluster.ekscape, aws_eks_node_group.eks_nodes]
+# }
+
+
+# resource "null_resource" "argocd_install" {
+#   provisioner "local-exec" {
+#     command = <<-EOT
+#       aws eks update-kubeconfig --name ${aws_eks_cluster.ekscape.name} --region us-east-1
+#       helm repo add argo https://argoproj.github.io/argo-helm
+#       helm repo update
+        #kubectl create namespace argocd
+        # helm install argocd argo/argo-cd --namespace argocd 
+
 #   }
 
 #   depends_on = [aws_eks_cluster.ekscape, aws_eks_node_group.eks_nodes]
