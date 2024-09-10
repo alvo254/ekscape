@@ -87,3 +87,58 @@ The `cidrsubnet` function allows you to programmatically and predictably split a
 4. `helm status`: Check the release status
 5. `helm upgrade`: Upgrade a release to a new version of the chart
 6. `helm rollback`: Roll back a release to a previous version
+
+# kubernetes manifest
+
+The `kubernetes_manifest` resource in Terraform allows you to apply Kubernetes manifests directly from a YAML or JSON configuration to your Kubernetes cluster. This resource is particularly useful for managing Kubernetes resources that may not be covered by other Terraform Kubernetes resources or when you want to use custom YAML or JSON configurations.
+
+Here’s a breakdown of the `kubernetes_manifest` resource you provided:
+
+### Resource Block
+
+```
+resource "kubernetes_manifest" "deployment" {
+  manifest = yamldecode(data.template_file.deployment.rendered)
+}
+```
+
+### Components
+
+1. **Resource Type**: `kubernetes_manifest`
+    
+    - This specifies that you are defining a Kubernetes manifest resource, which can handle any Kubernetes object using YAML or JSON format.
+2. **Resource Name**: `deployment`
+    
+    - This is a unique identifier for this resource instance within the Terraform configuration.
+3. **Attribute**: `manifest`
+    
+    - This attribute is where you provide the actual Kubernetes manifest that you want to apply to the cluster.
+
+### Detailed Explanation
+
+1. **`manifest`**:
+    
+    - **Definition**: The `manifest` attribute accepts the YAML or JSON representation of the Kubernetes object you want to deploy.
+    - **Usage**: The `manifest` field is populated with the output of the `yamldecode` function applied to the rendered template from the `template_file` data source.
+2. **`yamldecode`**:
+    
+    - **Function**: `yamldecode` is a Terraform function that converts a YAML string into a Terraform map or list. This is necessary because Terraform processes configurations as HCL (HashiCorp Configuration Language) and needs to interpret YAML configurations as data structures.
+    - **Usage**: `yamldecode(data.template_file.deployment.rendered)` converts the YAML string rendered by the `template_file` data source into a format Terraform can work with.
+3. **`data.template_file.deployment.rendered`**:
+    
+    - **Data Source**: `data.template_file.deployment` refers to the `template_file` data source that renders a YAML template with specified variables.
+    - **Attribute**: `.rendered` is the attribute of the `template_file` data source that contains the final rendered YAML as a string.
+
+### Example Workflow
+
+1. **Define a YAML Template**: You create a YAML template with placeholders for dynamic values.
+    
+2. **Render the Template**: Using the `template_file` data source, you render the YAML template by substituting placeholders with actual values.
+    
+3. **Apply the Manifest**: The `kubernetes_manifest` resource applies the rendered YAML configuration to your Kubernetes cluster.
+    
+
+### Use Cases
+
+- **Custom Resources**: Manage Kubernetes resources that are not supported by Terraform’s native Kubernetes resources.
+- **Complex Configurations**: Deploy configurations that are easier to manage or are more complex when defined as YAML or JSON.
