@@ -106,11 +106,11 @@ resource "aws_eks_node_group" "eks_nodes" {
 }
 
 
-resource "kubernetes_namespace" "test_namespace" {
-  metadata {
-    name = "test-namespace"
-  }
-}
+# resource "kubernetes_namespace" "test_namespace" {
+#   metadata {
+#     name = "test-namespace"
+#   }
+# }
 
 data "template_file" "deployment" {
   template = file("${path.module}/templates/deployment_template.yaml")
@@ -126,9 +126,10 @@ data "template_file" "deployment" {
   }
 }
 
-resource "kubernetes_manifest" "deployment" {
-  manifest = yamldecode(data.template_file.deployment.rendered)
-}
+//For some reason this wount wait for the cluster to stand-up..........Why? 
+# resource "kubernetes_manifest" "deployment" {
+#   manifest = yamldecode(data.template_file.deployment.rendered)
+# }
 
 data "template_file" "service" {
   template = file("${path.module}/templates/service_template.yaml")
@@ -143,76 +144,81 @@ data "template_file" "service" {
   }
 }
 
-resource "kubernetes_manifest" "service" {
-  manifest = yamldecode(data.template_file.service.rendered)
+
+resource "null_resource" "apply_k8s_manifests" {
+  provisioner "local-exec" {
+    command = <<-EOT
+      kubectl apply -f - <<EOF
+      ${data.template_file.deployment.rendered}
+      ---
+      ${data.template_file.service.rendered}
+      EOF
+    EOT
+  }
+
+  depends_on = [null_resource.kubeconfig_update, null_resource.cilium_install]
 }
 
 
-# resource "kubernetes_deployment" "ekscape" {
-#   metadata {
-#     name      = "ekscape-deployment"
-#     namespace = "default"  # Replace with your namespace
-#     labels = {
-#       app = "ekscape-app"
-#     }
-#   }
+resource "null_resource" "kubeconfig_update" {
+  provisioner "local-exec" {
+    command = <<-EOT
+      aws eks update-kubeconfig --name ${aws_eks_cluster.ekscape.name} --region us-east-1
+    EOT
+  }
 
-#   spec {
-#     replicas = 3  # Number of replicas
+  depends_on = [aws_eks_cluster.ekscape, aws_eks_node_group.eks_nodes]
+}
 
-#     selector {
-#       match_labels = {
-#         app = "ekscape-app"
-#       }
-#     }
-
-#     template {
-#       metadata {
-#         labels = {
-#           app = "ekscape-app"
-#         }
-#       }
-
-#       spec {
-#         container {
-#           name  = "ekscape-container"
-#           image = "nginx:latest"  # Replace with your container image
-#         }
-#       }
-#     }
-#   }
+# resource "kubernetes_manifest" "service" {
+#   manifest = yamldecode(data.template_file.service.rendered)
 # }
 
+resource "null_resource" "cilium_install" {
+  provisioner "local-exec" {
+    command = <<-EOT
+      helm repo add cilium https://helm.cilium.io/
+      helm repo update
+      helm install cilium cilium/cilium --version 1.15.6 \
+          --namespace kube-system \
+          --set eni.enabled=true \
+          --set ipam.mode=eni \
+          --set egressMasqueradeInterfaces=eth0 \
+          --set routingMode=native \
+          --set eks.enabled=true \
+          --set nodeinit.enabled=true \
+          --set nodeinit.restartPods=true \
+          --set tunnel=disabled \
+          --set installNoConntrackIptablesRules=true \
+          --set bpf.masquerade=true \
+          --set prometheus.enabled=true \
+          --set operator.prometheus.enabled=true \
+          --set hubble.enabled=true \
+          --set hubble.metrics.enabled="{dns,drop,tcp,flow,port-distribution,icmp,http}" \
+          --set tetragon.enabled=true \
+          --set tetragon.export.pprof.enabled=true \
+          --set tetragon.export.hubble.enabled=true \
+          --set tetragon.resources.requests.cpu=100m \
+          --set tetragon.resources.requests.memory=100Mi \
+          --set tetragon.resources.limits.cpu=500m \
+          --set tetragon.resources.limits.memory=500Mi
+    EOT
+  }
+
+  depends_on = [null_resource.kubeconfig_update, aws_eks_cluster.ekscape, aws_eks_node_group.eks_nodes]
+}
 
 
-# resource "null_resource" "cilium_install" {
-#   provisioner "local-exec" {
-#     command = <<-EOT
-#       aws eks update-kubeconfig --name ${aws_eks_cluster.ekscape.name} --region us-east-1
-#       helm repo add cilium https://helm.cilium.io/
-#       helm repo update
-#       helm install cilium cilium/cilium --version 1.14.2 \
-#         --namespace kube-system \
-#         --set eks.enabled=true \
-#         --set nodeinit.enabled=true \
-#         --set nodeinit.restartPods=true
-#     EOT
-#   }
+resource "null_resource" "argocd_install" {
+  provisioner "local-exec" {
+    command = <<-EOT
+      helm repo add argo https://argoproj.github.io/argo-helm
+      helm repo update
+      kubectl create namespace argocd
+      helm install argocd argo/argo-cd --namespace argocd \
+                              --set server.service.type=LoadBalancer
+    EOT
+  }
 
-#   depends_on = [aws_eks_cluster.ekscape, aws_eks_node_group.eks_nodes]
-# }
-
-
-# resource "null_resource" "argocd_install" {
-#   provisioner "local-exec" {
-#     command = <<-EOT
-#       aws eks update-kubeconfig --name ${aws_eks_cluster.ekscape.name} --region us-east-1
-#       helm repo add argo https://argoproj.github.io/argo-helm
-#       helm repo update
-        #kubectl create namespace argocd
-        # helm install argocd argo/argo-cd --namespace argocd 
-
-#   }
-
-#   depends_on = [aws_eks_cluster.ekscape, aws_eks_node_group.eks_nodes]
-# }
+  depends_on = [null_resource.kubeconfig_update, null_resource.cilium_install]
+}

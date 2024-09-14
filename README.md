@@ -1,6 +1,4 @@
-# ekscape
-
-## AWS EKS Cluster with IAM Roles, VPC, Security Groups, and Modules
+# AWS EKS Cluster with IAM Roles, VPC, Security Groups, and Modules
 
 This project creates an Amazon EKS cluster with necessary IAM roles, policies, VPC, and security groups using Terraform modules. The configuration provisions the EKS control plane, node groups, and attaches necessary policies to enable the EKS cluster to operate securely and efficiently. VPC and security group configurations are modularized for reuse.
 
