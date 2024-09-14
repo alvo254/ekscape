@@ -27,6 +27,9 @@ resource "aws_eks_cluster" "ekscape" {
   vpc_config {
     subnet_ids = [var.pub_sub1, var.pub_sub2]
   }
+  kubernetes_network_config {
+    ip_family = "ipv6"
+  }
 
   # Ensure that IAM Role permissions are created before and deleted after EKS Cluster handling.
   # Otherwise, EKS will not be able to properly delete EKS managed EC2 infrastructure such as Security Groups.
@@ -106,11 +109,11 @@ resource "aws_eks_node_group" "eks_nodes" {
 }
 
 
-resource "kubernetes_namespace" "test_namespace" {
-  metadata {
-    name = "test-namespace"
-  }
-}
+# resource "kubernetes_namespace" "test_namespace" {
+#   metadata {
+#     name = "test-namespace"
+#   }
+# }
 
 data "template_file" "deployment" {
   template = file("${path.module}/templates/deployment_template.yaml")
@@ -126,9 +129,49 @@ data "template_file" "deployment" {
   }
 }
 
-resource "kubernetes_manifest" "deployment" {
-  manifest = yamldecode(data.template_file.deployment.rendered)
+# resource "null_resource" "wait_for_eks" {
+#   provisioner "local-exec" {
+#     command = <<-EOT
+#       aws eks wait cluster-active --name ${aws_eks_cluster.ekscape.name} --region us-east-1
+#       aws eks get-token --cluster-name ${aws_eks_cluster.ekscape.name} | kubectl apply -f -
+#       kubectl wait --for=condition=Ready nodes --timeout=300s
+#     EOT
+#   }
+
+#   depends_on = [aws_eks_cluster.ekscape, aws_eks_node_group.eks_nodes]
+# }
+
+resource "null_resource" "kubeconfig_update" {
+  provisioner "local-exec" {
+    command = <<-EOT
+      aws eks update-kubeconfig --name ${aws_eks_cluster.ekscape.name} --region us-east-1
+    EOT
+  }
+
+  depends_on = [aws_eks_cluster.ekscape, aws_eks_node_group.eks_nodes]
 }
+
+resource "null_resource" "apply_k8s_manifests" {
+  provisioner "local-exec" {
+    command = <<-EOT
+      kubectl apply -f - <<EOF
+      ${data.template_file.deployment.rendered}
+      ---
+      ${data.template_file.service.rendered}
+      EOF
+    EOT
+  }
+
+  depends_on = [null_resource.kubeconfig_update, null_resource.cilium_install]
+}
+
+
+
+//For some reason this wount wait for the cluster to stand-up..........Why? 
+# resource "kubernetes_manifest" "deployment" {
+#   manifest = yamldecode(data.template_file.deployment.rendered)
+#   depends_on = [null_resource.wait_for_eks, aws_eks_cluster.ekscape, aws_eks_node_group.eks_nodes]
+# }
 
 data "template_file" "service" {
   template = file("${path.module}/templates/service_template.yaml")
@@ -143,37 +186,75 @@ data "template_file" "service" {
   }
 }
 
-resource "kubernetes_manifest" "service" {
-  manifest = yamldecode(data.template_file.service.rendered)
-}
+# resource "kubernetes_manifest" "service" {
+#   manifest = yamldecode(data.template_file.service.rendered)
+#   depends_on = [aws_eks_cluster.ekscape, aws_eks_node_group.eks_nodes]
+
+#   #depends_on = [null_resource.wait_for_eks]
+# }
 
 resource "null_resource" "cilium_install" {
   provisioner "local-exec" {
     command = <<-EOT
-      aws eks update-kubeconfig --name ${aws_eks_cluster.ekscape.name} --region us-east-1
       helm repo add cilium https://helm.cilium.io/
       helm repo update
+      API_SERVER=$(echo ${aws_eks_cluster.ekscape.endpoint} | sed 's|https://||')
       helm install cilium cilium/cilium --version 1.15.6 \
         --namespace kube-system \
+        --set ipam.mode=kubernetes \
+        --set ipv6.enabled=true \
+        --set tunnel=disabled \
+        --set ipv6NativeRoutingCIDR=${var.vpc_ipv6_cidr_block} \
+        --set k8sServiceHost=$API_SERVER \
+        --set k8sServicePort=443 \
         --set eks.enabled=true \
         --set nodeinit.enabled=true \
-        --set nodeinit.restartPods=true
+        --set nodeinit.restartPods=true \
+        --set enableIPv6Masquerade=true
     EOT
   }
 
-  depends_on = [aws_eks_cluster.ekscape, aws_eks_node_group.eks_nodes]
+  depends_on = [null_resource.kubeconfig_update]
 }
+
+# resource "null_resource" "cilium_install" {
+#   provisioner "local-exec" {
+#     command = <<-EOT
+#       helm repo add cilium https://helm.cilium.io/
+#       helm repo update
+#       API_SERVER=$(echo ${aws_eks_cluster.ekscape.endpoint} | sed 's|https://||')
+#       helm install cilium cilium/cilium --version 1.15.6 \
+#         --namespace kube-system \
+#         --set ipam.mode=kubernetes \
+#         --set ipv4.enabled=true \
+#         --set ipv6.enabled=true \
+#         --set tunnel=disabled \
+#         --set ipv4NativeRoutingCIDR=${var.vpc_cidr_block} \
+#         --set ipv6NativeRoutingCIDR=${var.vpc_ipv6_cidr_block} \
+#         --set k8sServiceHost=$API_SERVER \
+#         --set k8sServicePort=443 \
+#         --set eks.enabled=true \
+#         --set nodeinit.enabled=true \
+#         --set nodeinit.restartPods=true \
+#         --set enableIPv4Masquerade=true \
+#         --set enableIPv6Masquerade=true
+#     EOT
+#   }
+
+#   depends_on = [null_resource.kubeconfig_update]
+# }
+
 
 # resource "null_resource" "argocd_install" {
 #   provisioner "local-exec" {
 #     command = <<-EOT
-#       aws eks update-kubeconfig --name ${aws_eks_cluster.ekscape.name} --region us-east-1
 #       helm repo add argo https://argoproj.github.io/argo-helm
 #       helm repo update
-        #kubectl create namespace argocd
-        # helm install argocd argo/argo-cd --namespace argocd 
-
+#       kubectl create namespace argocd
+#       helm install argocd argo/argo-cd --namespace argocd \
+#                               --set server.service.type=LoadBalancer
+#     EOT
 #   }
 
-#   depends_on = [aws_eks_cluster.ekscape, aws_eks_node_group.eks_nodes]
+#   depends_on = [null_resource.kubeconfig_update, null_resource.cilium_install]
 # }
