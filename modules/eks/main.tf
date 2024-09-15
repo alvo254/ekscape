@@ -26,6 +26,7 @@ resource "aws_eks_cluster" "ekscape" {
 
   vpc_config {
     subnet_ids = [var.pub_sub1, var.pub_sub2]
+    security_group_ids = [var.security_group_id]
   }
 
   # Ensure that IAM Role permissions are created before and deleted after EKS Cluster handling.
@@ -181,27 +182,29 @@ resource "null_resource" "cilium_install" {
       helm repo update
       helm install cilium cilium/cilium --version 1.15.6 \
           --namespace kube-system \
-          --set eni.enabled=true \
-          --set ipam.mode=eni \
-          --set egressMasqueradeInterfaces=eth0 \
-          --set routingMode=native \
-          --set eks.enabled=true \
-          --set nodeinit.enabled=true \
-          --set nodeinit.restartPods=true \
-          --set tunnel=disabled \
-          --set installNoConntrackIptablesRules=true \
-          --set bpf.masquerade=true \
-          --set prometheus.enabled=true \
-          --set operator.prometheus.enabled=true \
-          --set hubble.enabled=true \
-          --set hubble.metrics.enabled="{dns,drop,tcp,flow,port-distribution,icmp,http}" \
-          --set tetragon.enabled=true \
-          --set tetragon.export.pprof.enabled=true \
-          --set tetragon.export.hubble.enabled=true \
-          --set tetragon.resources.requests.cpu=100m \
-          --set tetragon.resources.requests.memory=100Mi \
-          --set tetragon.resources.limits.cpu=500m \
-          --set tetragon.resources.limits.memory=500Mi
+                    --set eni.enabled=true \
+                    --set ipam.mode=eni \
+                    --set egressMasqueradeInterfaces=eth0 \
+                    --set routingMode=native \
+                    --set eks.enabled=true \
+                    --set nodeinit.enabled=true \
+                    --set nodeinit.restartPods=true \
+                    --set tunnel=disabled \
+                    --set installNoConntrackIptablesRules=true \
+                    --set bpf.masquerade=false \
+                    --set prometheus.enabled=true \
+                    --set operator.prometheus.enabled=true \
+                    --set hubble.enabled=true \
+                    --set hubble.metrics.enabled="{dns,drop,tcp,flow,port-distribution,icmp,http}" \
+                    --set tetragon.enabled=true \
+                    --set nodePort.enabled=true \
+                    --set tetragon.export.pprof.enabled=true \
+                    --set tetragon.export.hubble.enabled=true \
+                    --set tetragon.resources.requests.cpu=100m \
+                    --set tetragon.resources.requests.memory=100Mi \
+                    --set tetragon.resources.limits.cpu=500m \
+                    --set tetragon.resources.limits.memory=500Mi \
+                    --set directRoutingDevice=eth0
     EOT
   }
 
