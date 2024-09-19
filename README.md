@@ -1,117 +1,155 @@
-# AWS EKS Cluster with IAM Roles, VPC, Security Groups, and Modules
+# Automated AWS EKS Deployment using Terraform, Helm, and Cilium
+
+## Table of Contents
+
+1. [Project Overview](#project-overview)
+2. [Project Details](#project-details)
+3. [Project Structure](#project-structure)
+4. [Pre-Requisites](#pre-requisites)
+5. [Getting Started](#getting-started)
+    - [Cloning the Repository](#cloning-the-repository)
+    - [Running Terraform](#running-terraform)
+6. [Terraform Modules](#terraform-modules)
+    - [VPC Module](#vpc-module)
+    - [Security Group Module](#security-group-module)
+    - [EKS Module](#eks-module)
+7. [Documentation](#documentation)
+8. [Troubleshooting](#troubleshooting)
+9. [Contributing](#contributing)
+10. [License](#license)
+
+## Project Overview
+
+This project sets up an AWS EKS (Elastic Kubernetes Service) cluster using Terraform, including IAM roles, node groups, and Kubernetes manifests. It also configures Cilium as the CNI (Container Network Interface) for advanced networking and security, and integrates ArgoCD for GitOps to automate application deployments.
+
+## Project Details
+
+- **Name**: EKS Terraform Setup
+- **Description**: A Terraform-based solution to deploy and manage an AWS EKS cluster with associated networking, security, and Kubernetes configurations. Includes setup for Cilium networking policies and ArgoCD for continuous deployment.
+- **Key Components**:
+    - **AWS EKS Cluster**: Managed Kubernetes service for container orchestration.
+    - **Cilium**: CNI plugin for advanced networking and security.
+    - **ArgoCD**: GitOps tool for continuous deployment and application management.
+- **Purpose**: To provide a scalable and secure Kubernetes environment with automated deployment capabilities.
 
 This project creates an Amazon EKS cluster with necessary IAM roles, policies, VPC, and security groups using Terraform modules. The configuration provisions the EKS control plane, node groups, and attaches necessary policies to enable the EKS cluster to operate securely and efficiently. VPC and security group configurations are modularized for reuse.
 
-## Prerequisites
+## Project Structure
 
-Before using this configuration, ensure you have:
+```
+├── Docs/
+│   ├── cilium.md
+│   ├── technical-docs.md
+│   └── sad.md
+├── frontend/
+│   └── (frontend application code and configuration)
+├── modules/
+│   ├── eks/
+│   │   ├── main.tf
+│   │   ├── variables.tf
+│   │   ├── outputs.tf
+│   │   └── templates/
+│   │       ├── deployment_template.yaml
+│   │       └── service_template.yaml
+│   ├── sg/
+│   │   ├── main.tf
+│   │   ├── variables.tf
+│   │   └── outputs.tf
+│   └── vpc/
+│       ├── main.tf
+│       ├── variables.tf
+│       └── outputs.tf
+├── main.tf
+├── providers.tf
+└── README.md
+```
 
-- **Terraform** installed.
-- **AWS CLI** configured with appropriate permissions.
-- Necessary **IAM permissions** for managing EKS, EC2, and IAM resources.
-- **VPC and subnets** set up for the EKS cluster.
 
-## Modules
+## Pre-Requisites
 
-The following modules are included in the configuration:
+Before running the Terraform configuration, ensure the following tools are installed:
 
-1. **VPC Module (`vpc`)**: Creates the VPC and subnets for the EKS cluster.
+- **Terraform**: Infrastructure as code tool to manage and provision your infrastructure.
+- **Helm**: Package manager for Kubernetes used to manage Kubernetes applications.
+- **Kubectl**: Command-line tool for interacting with Kubernetes clusters.
+- **Cilium**: Networking and security project for Kubernetes and other containerized environments.
+- **[AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/install-cliv2.html)**: Command-line tool for interacting with AWS services.
+
+## Getting Started
+
+### Cloning the Repository
+
+To get started, first clone the repository:
+
+`git clone https://github.com/alvo254/ekscape`
+
+### Running Terraform
+
+Before running Terraform, ensure that you have the tools listed in the [Pre-Requisites](#pre-requisites) installed and configured with AWS credentials.
+
+1. **Initialize Terraform**: This command sets up the working directory and downloads the necessary providers.
     
-    - Outputs:
-        - `vpc_id`: ID of the VPC.
-        - `pub_sub1`: First public subnet.
-        - `pub_sub2`: Second public subnet.
-2. **Security Group Module (`sg`)**: Creates security groups for the EKS cluster, linked to the VPC.
+    `terraform init`
     
-    - Input:
-        - `vpc_id`: The ID of the VPC created by the `vpc` module.
-3. **EKS Module (`eks`)**: Provisions the EKS cluster and node groups.
+2. **Plan Infrastructure Changes**: This command shows what actions Terraform will take without making any changes.
+
+    `terraform plan`
     
-    - Inputs:
-        - `pub_sub1`: First public subnet (output from the `vpc` module).
-        - `pub_sub2`: Second public subnet (output from the `vpc` module).
-
-## Resources
-
-### IAM Roles
-
-1. **EKS Cluster Role (`ekscape-cluster-role`)**:
+3. **Apply Infrastructure Changes**: This command applies the changes required to reach the desired state of the configuration.
     
-    - Role trusted by the EKS service to manage cluster-related resources.
-    - Policies attached:
-        - `AmazonEKSClusterPolicy`
-        - `AmazonEC2ContainerRegistryReadOnly`
-2. **EKS Node Role (`ekscape-node-role`)**:
+    `terraform apply --auto-approve`
     
-    - Role assigned to EC2 instances acting as worker nodes in the EKS cluster.
-    - Policies attached:
-        - `AmazonEKSWorkerNodePolicy`
-        - `AmazonEKS_CNI_Policy`
-        - `AmazonEC2ContainerRegistryReadOnly`
+4. **Destroy Infrastructure**: This command removes all the resources defined in the configuration.
+    
+    `terraform destroy --auto-approve`
+    
 
-### EKS Cluster
+## Terraform Modules
 
-- **EKS Cluster (`ekscape`)**: This resource creates the EKS cluster using the IAM role `ekscape-cluster-role` and attaches VPC subnets for the cluster, utilizing the `eks` module.
+Terraform modules are used to organize and encapsulate Terraform configurations. Here’s a breakdown of the modules used in this project:
 
-### EKS Node Group
+### VPC Module
 
-- **EKS Node Group (`ekscape-nodes`)**: Defines a managed node group for the EKS cluster. It provisions EC2 instances as worker nodes with the IAM role `ekscape-node-role` and scaling settings, also within the `eks` module.
+- **Path**: `modules/vpc/`
+- **Files**:
+    - `main.tf`: Defines the VPC, subnets, and any related networking resources.
+    - `variables.tf`: Declares input variables used by the VPC module.
+    - `outputs.tf`: Specifies output values that can be used by other modules or configurations.
 
-### IAM Policies
+### Security Group Module
 
-- The following AWS managed policies are attached to the roles:
-    - `AmazonEKSClusterPolicy`: Grants permissions to manage EKS resources.
-    - `AmazonEC2ContainerRegistryReadOnly`: Provides read-only access to Amazon ECR.
-    - `AmazonEKSWorkerNodePolicy`: Grants necessary permissions for worker nodes.
-    - `AmazonEKS_CNI_Policy`: Allows worker nodes to manage network interfaces.
+- **Path**: `modules/sg/`
+- **Files**:
+    - `main.tf`: Defines the security groups and their rules.
+    - `variables.tf`: Declares input variables for security group configuration.
+    - `outputs.tf`: Provides output values such as security group IDs for use in other modules.
 
-## Variables
+### EKS Module
 
-- **`module.vpc.pub_sub1`**: First public subnet ID from the VPC module.
-- **`module.vpc.pub_sub2`**: Second public subnet ID from the VPC module.
+- **Path**: `modules/eks/`
+- **Files**:
+    - `main.tf`: Sets up the EKS cluster, node groups, and associated IAM roles and policies.
+    - `variables.tf`: Declares input variables for the EKS module, including VPC and subnet IDs, node roles, etc.
+    - `outputs.tf`: Outputs the EKS cluster name and other relevant details.
+    - **templates/**: Contains YAML files for Kubernetes manifests and Cilium network policies.
+        - `deployment_template.yaml`: Template for Kubernetes deployment manifests.
+        - `service_template.yaml`: Template for Kubernetes service manifests.
 
+## Documentation
 
-## Interacting with the EKS Cluster
+- **Cilium Documentation**: [Docs/cilium.md](Docs/cilium.md)
+- **Technical Documentation**: Docs/technical-docs.md
+- **Solution Architect Documentation**: [Docs/sad.md](Docs/sad.md)
 
-Once the EKS cluster is created and provisioned, you will need to configure your local environment to interact with the cluster. Follow these steps:
+## Troubleshooting
 
-### 1. Configure `kubectl`
+Ensure that IAM roles and policies are correctly applied. Verify that the EKS cluster and node group are fully operational before applying Kubernetes manifests.
 
-Ensure you have `kubectl` installed. You can install it from Kubernetes documentation.
+## Contributing
 
-Run the following command to configure `kubectl` to use your EKS cluster:
+Contributions are welcome! Please submit pull requests or raise issues if you encounter problems or have suggestions.
 
-`aws eks --region <region> update-kubeconfig --name <cluster-name>`
+## License
 
-Replace `<region>` with the AWS region where your EKS cluster is deployed and `<cluster-name>` with the name of your EKS cluster.
+This project is licensed under the MIT License. See the LICENSE file for details.
 
-### 2. Verify Cluster Connection
-
-To verify that `kubectl` is properly configured and can communicate with your EKS cluster, run:
-
-`kubectl get nodes`
-
-This command should list the nodes in your EKS cluster.
-
-
-### 3. Expose argocd
-
-
-```
-kubectl create ns argocd
-```
-
-This command create argocd namespace
-
-```
-helm install argocd argo/argo-cd --namespace argocd \
-                                 --set server.service.type=LoadBalancer
-```
-
-This command installs argocd into the cluster and exposes it as loadbalance to access the argocd ui via exteranlIP
-
-```
-kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d
-```
-
-This command get the initial admin password for you to access argocd ui
