@@ -122,8 +122,8 @@ data "template_file" "deployment" {
     app_label       = "ekscape-app"
     replicas        = 3
     container_name  = "ekscape-container"
-    container_image = "nginx:latest"
-    container_port  = 80
+    container_image = "car-app:v1.0.0"
+    container_port  = 3000
   }
 }
 
@@ -139,8 +139,8 @@ data "template_file" "service" {
     name           = "ekscape-service"
     namespace      = "default"
     app_label      = "ekscape-app"
-    service_port   = 80
-    container_port = 80
+    service_port   = 3000
+    container_port = 3000
     service_type   = "LoadBalancer"  #"ClusterIP"  # or "LoadBalancer", "NodePort", depending on your needs
   }
 }
@@ -196,6 +196,8 @@ resource "null_resource" "cilium_install" {
                     --set operator.prometheus.enabled=true \
                     --set hubble.enabled=true \
                     --set hubble.metrics.enabled="{dns,drop,tcp,flow,port-distribution,icmp,http}" \
+                    --set hubble.relay.enabled=true \
+                    --set hubble.ui.enabled=true \
                     --set tetragon.enabled=true \
                     --set nodePort.enabled=true \
                     --set tetragon.export.pprof.enabled=true \
