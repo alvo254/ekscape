@@ -28,6 +28,30 @@ resource "aws_security_group" "ekscape-sg" {
       ipv6_cidr_blocks = ["::/0"]
 
     },
+     {
+      description      = "used by hubble relay"
+      from_port        = 8080
+      to_port          = 8080
+      protocol         = "tcp"
+      cidr_blocks      = ["0.0.0.0/0"]
+      prefix_list_ids  = []
+      security_groups  = []
+      self             = false
+      ipv6_cidr_blocks = ["::/0"]
+
+    },
+     {
+      description      = "HTTPS"
+      from_port        = 80
+      to_port          = 80
+      protocol         = "tcp"
+      cidr_blocks      = ["0.0.0.0/0"]
+      prefix_list_ids  = []
+      security_groups  = []
+      self             = false
+      ipv6_cidr_blocks = ["::/0"]
+
+    },
     {
       description      = "SSH"
       from_port        = 22
