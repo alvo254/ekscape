@@ -1,0 +1,55 @@
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: allow-imds-access
+  namespace: prometheus
+spec:
+  description: "Allow pods to access the EC2 instance metadata service"
+  endpointSelector: {}
+  egress:
+  - toCIDR:
+    - 169.254.169.254/32  # Metadata service IP
+    toPorts:
+    - port: "80"  # HTTP port for metadata service
+      protocol: TCP
+
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: allow-egress-to-kube-apiserver
+  namespace: prometheus
+spec:
+  endpointSelector:
+    matchLabels:
+      app: kube-state-metrics  # Adjust the label if necessary
+  egress:
+  - toEndpoints:
+    - matchLabels:
+        reserved: kube-apiserver
+    - toCIDR:
+      - "172.16.3.244/32"  # API server IP
+  - toPorts:
+    - port: "443"
+      protocol: TCP
+
+
+# apiVersion: "cilium.io/v2"   
+# kind: CiliumNetworkPolicy
+# metadata:
+#   name: allow-imds-access
+#   namespace: prometheus  # Adjust the namespace as needed
+# spec:
+#   description: "Allow pods to access the EC2 instance metadata service"
+#   endpointSelector: {}
+#   egress:
+#   - toEntities:
+#     - world  # Allow access to external IPs
+#     toCIDR:
+#     - 169.254.169.254/32  # Metadata service IP
+#     toPorts:
+#     - ports:
+#       - port: "80"  # HTTP port for metadata service
+#         protocol: TCP
+
+# kubectl exec -it ekscape-2-79d4ccc7c5-rcx8n -n default -- curl -k localhost
