@@ -9,3 +9,7 @@ variable "pub_sub2" {
 variable "security_group_id" {
   type = string
 }
+
+variable "region" {
+  default = "us-east-1"
+}
