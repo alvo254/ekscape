@@ -5,7 +5,7 @@ metadata:
 provisioner: ebs.csi.aws.com
 volumeBindingMode: WaitForFirstConsumer
 parameters:
-  type: gp2
+  type: gp3
 
 
 ---

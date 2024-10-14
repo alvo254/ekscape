@@ -1,0 +1,20 @@
+apiVersion: tetragon.cilium.io/v1alpha1
+kind: TracingPolicy
+metadata:
+  name: suspicious-process-monitoring
+spec:
+  selectors:
+    - matchPIDs:
+        - binary: /bin/bash
+      action: log
+      
+---
+apiVersion: tetragon.cilium.io/v1alpha1
+kind: TracingPolicy
+metadata:
+  name: block-nc-execution
+spec:
+  selectors:
+    - matchBinaries:
+        - binary: /usr/bin/nc
+      action: deny
