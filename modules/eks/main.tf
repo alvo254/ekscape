@@ -1,3 +1,4 @@
+# IAM Role for EKS Cluster
 resource "aws_iam_role" "eks_cluster_role" {
   name = "ekscape-cluster-role"
 
@@ -15,22 +16,6 @@ resource "aws_iam_role" "eks_cluster_role" {
   })
 }
 
-resource "aws_eks_cluster" "ekscape" {
-  name                      = "ekscape"
-  role_arn                  = aws_iam_role.eks_cluster_role.arn
-  enabled_cluster_log_types = ["api", "audit", "authenticator", "controllerManager", "scheduler"]
-
-  vpc_config {
-    subnet_ids         = [var.pub_sub1, var.pub_sub2]
-    security_group_ids = [var.security_group_id]
-  }
-
-  depends_on = [
-    aws_iam_role_policy_attachment.AmazonEKSClusterPolicy,
-    aws_iam_role_policy_attachment.AmazonEC2ContainerRegistryReadOnly-EKS,
-  ]
-}
-
 resource "aws_iam_role_policy_attachment" "AmazonEKSClusterPolicy" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
   role       = aws_iam_role.eks_cluster_role.name
@@ -41,35 +26,7 @@ resource "aws_iam_role_policy_attachment" "AmazonEC2ContainerRegistryReadOnly-EK
   role       = aws_iam_role.eks_cluster_role.name
 }
 
-
-# EKS Node Group
-resource "aws_eks_node_group" "eks_nodes" {
-  cluster_name    = aws_eks_cluster.ekscape.name
-  node_group_name = "ekscape-nodes"
-  node_role_arn   = aws_iam_role.eks_node_role.arn
-  subnet_ids      = [var.pub_sub1, var.pub_sub2]
-
-  scaling_config {
-    desired_size = 3
-    max_size     = 5
-    min_size     = 2
-  }
-
-  launch_template {
-    id      = aws_launch_template.eks_launch_template.id # Use the launch template ID
-    version = "$Latest"                                  # Or specify a version
-  }
-
-  instance_types = ["t3.medium"]
-
-  depends_on = [
-    aws_iam_role_policy_attachment.AmazonEKSWorkerNodePolicy,
-    aws_iam_role_policy_attachment.AmazonEKS_CNI_Policy,
-    aws_iam_role_policy_attachment.AmazonEC2ContainerRegistryReadOnly,
-  ]
-}
-
-# EKS Node IAM Role
+# IAM Role for EKS Node Group
 resource "aws_iam_role" "eks_node_role" {
   name = "ekscape-node-role"
 
@@ -103,6 +60,7 @@ resource "aws_iam_role_policy_attachment" "AmazonEC2ContainerRegistryReadOnly" {
 }
 
 
+# Deploy application
 data "template_file" "deployment" {
   template = file("${path.module}/templates/deployment_template.yaml")
 
@@ -117,11 +75,6 @@ data "template_file" "deployment" {
   }
 }
 
-//For some reason this wount wait for the cluster to stand-up..........Why? 
-# resource "kubernetes_manifest" "deployment" {
-#   manifest = yamldecode(data.template_file.deployment.rendered)
-# }
-
 data "template_file" "service" {
   template = file("${path.module}/templates/service_template.yaml")
 
@@ -131,7 +84,7 @@ data "template_file" "service" {
     app_label      = "ekscape-app"
     service_port   = 3000
     container_port = 3000
-    service_type   = "LoadBalancer" #"ClusterIP"  # or "LoadBalancer", "NodePort", depending on your needs
+    service_type   = "LoadBalancer"
   }
 }
 
@@ -150,28 +103,14 @@ resource "null_resource" "apply_k8s_manifests" {
   depends_on = [null_resource.kubeconfig_update, null_resource.cilium_install]
 }
 
-
-resource "null_resource" "kubeconfig_update" {
-  provisioner "local-exec" {
-    command = <<-EOT
-      aws eks update-kubeconfig --name ${aws_eks_cluster.ekscape.name} --region us-east-1
-    EOT
-  }
-
-  depends_on = [aws_eks_cluster.ekscape, aws_eks_node_group.eks_nodes]
-}
-
-
+# Launch Template
 resource "aws_launch_template" "eks_launch_template" {
   name_prefix = "eks-node-launch-template"
-  # image_id      = "ami-05ac7467eb3204c31"   # Replace with a valid EKS-optimized AMI
-  # instance_type = "t3.medium"
 
-  # Metadata Options for IMDSv2
   metadata_options {
-    http_tokens                 = "required" # Enforce IMDSv2
-    http_put_response_hop_limit = 1          # Optional: limits the number of network hops
-    http_endpoint               = "enabled"  # Ensure the metadata service is enabled
+    http_tokens                 = "required"
+    http_put_response_hop_limit = 1
+    http_endpoint               = "enabled"
   }
 
   tag_specifications {
@@ -183,6 +122,81 @@ resource "aws_launch_template" "eks_launch_template" {
 }
 
 
+
+# EKS Cluster creation using eksctl
+resource "null_resource" "eksctl_create_cluster" {
+  provisioner "local-exec" {
+    command = <<-EOT
+      eksctl create cluster \
+        --name ekscape \
+        --region us-east-1 \
+        --vpc-public-subnets ${var.pub_sub1},${var.pub_sub2} \
+        --without-nodegroup \
+        --managed \
+        --full-ecr-access \
+        --alb-ingress-access \
+        --asg-access \
+        --appmesh-access \
+        --with-oidc \
+        --dry-run > cluster.yaml
+
+      eksctl create cluster -f cluster.yaml
+    EOT
+  }
+
+  depends_on = [
+    aws_iam_role.eks_cluster_role,
+    aws_iam_role.eks_node_role,
+    aws_launch_template.eks_launch_template
+  ]
+}
+
+# EKS Node Group managed by Terraform
+resource "aws_eks_node_group" "eks_nodes" {
+  cluster_name    = "ekscape"
+  node_group_name = "ekscape-nodes"
+  node_role_arn   = aws_iam_role.eks_node_role.arn
+  subnet_ids      = [var.pub_sub1, var.pub_sub2]
+
+  scaling_config {
+    desired_size = 3
+    max_size     = 5
+    min_size     = 2
+  }
+
+  launch_template {
+    id      = aws_launch_template.eks_launch_template.id
+    version = "$Latest"
+  }
+
+  instance_types = ["t3.medium"]
+
+  labels = {
+    "environment" = "production"
+  }
+
+  # remote_access {
+  #   ec2_ssh_key = var.ssh_key_name
+  # }
+
+  depends_on = [
+    null_resource.eksctl_create_cluster,
+    aws_iam_role_policy_attachment.AmazonEKSWorkerNodePolicy,
+    aws_iam_role_policy_attachment.AmazonEKS_CNI_Policy,
+    aws_iam_role_policy_attachment.AmazonEC2ContainerRegistryReadOnly,
+  ]
+}
+
+# Update kubeconfig
+resource "null_resource" "kubeconfig_update" {
+  provisioner "local-exec" {
+    command = "aws eks update-kubeconfig --name ekscape --region us-east-1"
+  }
+
+  depends_on = [null_resource.eksctl_create_cluster, aws_eks_node_group.eks_nodes]
+}
+
+# Install Cilium
 resource "null_resource" "cilium_install" {
   provisioner "local-exec" {
     command = <<-EOT
@@ -214,10 +228,10 @@ resource "null_resource" "cilium_install" {
     EOT
   }
 
-  depends_on = [null_resource.kubeconfig_update, aws_eks_cluster.ekscape, aws_eks_node_group.eks_nodes]
+  depends_on = [null_resource.kubeconfig_update]
 }
 
-
+# Install Tetragon
 resource "null_resource" "tetragon_install" {
   provisioner "local-exec" {
     command = <<-EOT
@@ -233,13 +247,14 @@ resource "null_resource" "tetragon_install" {
                     --set tetragon.resources.requests.cpu=100m \
                     --set tetragon.resources.requests.memory=100Mi \
                     --set tetragon.resources.limits.cpu=500m \
-                    --set tetragon.resources.limits.memory=500Mi \
+                    --set tetragon.resources.limits.memory=500Mi
     EOT
   }
 
-  depends_on = [null_resource.kubeconfig_update, aws_eks_cluster.ekscape, aws_eks_node_group.eks_nodes, null_resource.cilium_install]
+  depends_on = [null_resource.cilium_install]
 }
 
+# Install ArgoCD
 resource "null_resource" "argocd_install" {
   provisioner "local-exec" {
     command = <<-EOT
@@ -251,5 +266,5 @@ resource "null_resource" "argocd_install" {
     EOT
   }
 
-  depends_on = [null_resource.kubeconfig_update, null_resource.cilium_install]
+  depends_on = [null_resource.cilium_install]
 }

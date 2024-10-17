@@ -8,7 +8,7 @@ terraform {
 
 
 provider "aws" {
-  profile = "default"
+  profile = "aviatrix"
   region  = "us-east-1"
 }
 
